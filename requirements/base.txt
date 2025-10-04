@@ -16,6 +16,7 @@ dj-rest-auth==4.0.*
 django-axes==6.2.*
 django-csp==3.7.*
 django-permissions-policy==4.19.*
+pyotp==2.9.0
 
 # Location services
 geopy==2.4.*
