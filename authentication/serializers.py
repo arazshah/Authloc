@@ -245,4 +245,3 @@ class TwoFactorSetupSerializer(serializers.Serializer):
         if not isinstance(value, bool):
             raise serializers.ValidationError(_("Invalid value."))
         return value
-*** End of File
