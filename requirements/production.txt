@@ -1,0 +1,47 @@
+-r base.txt
+
+# Production specific packages
+gunicorn==21.2.*
+whitenoise==6.6.*
+brotli==1.1.*
+zopfli==0.2.*
+
+# Monitoring and logging
+sentry-sdk==1.38.*
+django-silk==5.0.*
+structlog==23.2.*
+django-log-request-id==2.0.*
+
+# Security
+django-axes==6.2.*
+django-csp==3.7.*
+django-permissions-policy==4.18.*
+django-secure==1.0.*
+
+# Database
+psycopg2-binary==2.9.*
+
+# Caching
+django-redis==5.4.*
+hiredis==2.2.*
+
+# Performance
+django-compressor==4.4.*
+rcssmin==1.1.*
+rjsmin==1.2.*
+
+# Health checks
+django-health-check==3.18.*
+
+# Backup
+django-dbbackup==4.1.*
+
+# Rate limiting
+django-ratelimit==4.1.*
+
+# Email
+django-anymail==10.2.*
+
+# File storage
+django-storages==1.14.*
+boto3==1.29.*

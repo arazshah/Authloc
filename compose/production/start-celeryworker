@@ -1,0 +1,8 @@
+#!/bin/bash
+set -o errexit
+set -o pipefail
+set -o nounset
+
+export DJANGO_SETTINGS_MODULE="${DJANGO_SETTINGS_MODULE:-authloc.settings.production}"
+
+celery -A authloc worker -l INFO

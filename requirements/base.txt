@@ -1,0 +1,50 @@
+ # Core Django
+Django==5.0.*
+djangorestframework==3.14.*
+djangorestframework-simplejwt==5.3.*
+django-filter==23.5
+django-cors-headers==4.3.*
+django-environ==0.11.*
+
+# Database
+psycopg2-binary==2.9.*
+dj-database-url==2.1.*
+
+# Authentication & Security
+django-allauth==0.63.3
+dj-rest-auth==4.0.*
+django-axes==6.2.*
+django-csp==3.7.*
+django-permissions-policy==4.19.*
+
+# Location services
+geopy==2.4.*
+django-leaflet==0.29.*
+
+# Background tasks
+celery==5.3.*
+redis==5.0.*
+django-celery-beat==2.5.*
+django-celery-results==2.5.*
+
+# Caching
+django-redis==5.4.*
+
+# Image processing
+Pillow==10.1.*
+
+# API documentation
+drf-spectacular==0.27.*
+drf-spectacular-sidecar==2023.9.*
+
+# Monitoring & Logging
+sentry-sdk==1.38.*
+structlog==23.2.*
+
+# Deployment
+gunicorn==21.2.*
+whitenoise==6.6.*
+
+# Utilities
+requests==2.31.*
+python-decouple==3.8.*

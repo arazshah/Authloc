@@ -1,0 +1,18 @@
+#!/bin/bash
+set -o errexit
+set -o pipefail
+set -o nounset
+
+export DJANGO_SETTINGS_MODULE="${DJANGO_SETTINGS_MODULE:-authloc.settings.production}"
+
+python manage.py collectstatic --noinput
+python manage.py migrate
+
+if [ "${DJANGO_SUPERUSER_USERNAME:-}" != "" ] && [ "${DJANGO_SUPERUSER_EMAIL:-}" != "" ]; then
+  python manage.py createsuperuser \
+    --noinput \
+    --username "$DJANGO_SUPERUSER_USERNAME" \
+    --email "$DJANGO_SUPERUSER_EMAIL" || true
+fi
+
+gunicorn authloc.wsgi:application --bind 0.0.0.0:8000 --workers ${GUNICORN_WORKERS:-3}
