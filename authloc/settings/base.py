@@ -259,6 +259,12 @@ CELERY_TASK_TIME_LIMIT = 30 * 60
 CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+CELERY_BEAT_SCHEDULE = {
+    "expire-user-roles-hourly": {
+        "task": "permissions.expire_user_roles",
+        "schedule": timedelta(hours=1),
+    }
+}
 
 AXES_FAILURE_LIMIT = env.int("AXES_FAILURE_LIMIT")
 AXES_COOLOFF_TIME = timedelta(minutes=env.int("AXES_COOLOFF_MINUTES"))
