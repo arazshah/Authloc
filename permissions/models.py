@@ -276,3 +276,195 @@ class RoleAssignmentRequest(UUIDModel, TimeStampedModel, UserTrackedModel):
         self.save(
             update_fields=["status", "approver", "reviewed_at", "response_message", "updated_at", "updated_by"]
         )
+
+
+class LocationAccessQuerySet(models.QuerySet):
+    def active(self, at: Optional[Any] = None):
+        reference = at or timezone.now()
+        return self.filter(
+            models.Q(valid_from__isnull=True) | models.Q(valid_from__lte=reference),
+            models.Q(valid_until__isnull=True) | models.Q(valid_until__gte=reference),
+            is_active=True,
+        )
+
+    def for_user(self, user):
+        if user is None:
+            return self.none()
+        return self.filter(user=user)
+
+    def for_location(self, location: Optional[Location]):
+        if location is None:
+            return self.filter(location__isnull=True)
+        return self.filter(models.Q(location=location) | models.Q(location__isnull=True))
+
+    def inheritable(self):
+        return self.filter(inherit_to_children=True)
+
+
+class LocationAccess(UUIDModel, TimeStampedModel, UserTrackedModel):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="location_accesses",
+    )
+    location = models.ForeignKey(
+        Location,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="access_entries",
+    )
+    role = models.ForeignKey(
+        Role,
+        on_delete=models.CASCADE,
+        related_name="location_accesses",
+    )
+
+    can_read = models.BooleanField(default=True)
+    can_create = models.BooleanField(default=False)
+    can_update = models.BooleanField(default=False)
+    can_delete = models.BooleanField(default=False)
+    can_admin = models.BooleanField(default=False)
+
+    accessible_fields = models.JSONField(default=list, blank=True)
+    restricted_fields = models.JSONField(default=list, blank=True)
+
+    inherit_to_children = models.BooleanField(default=True)
+    valid_from = models.DateTimeField(null=True, blank=True)
+    valid_until = models.DateTimeField(null=True, blank=True)
+
+    granted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="granted_location_accesses",
+    )
+    reason = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    objects = LocationAccessQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = "Location Access"
+        verbose_name_plural = "Location Accesses"
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=["user", "is_active"]),
+            models.Index(fields=["location", "is_active"]),
+            models.Index(fields=["role", "is_active"]),
+            models.Index(fields=["valid_from", "valid_until"]),
+        ]
+        unique_together = (
+            "user",
+            "location",
+            "role",
+            "valid_from",
+            "valid_until",
+        )
+
+    def __str__(self) -> str:  # pragma: no cover - display helper
+        location_name = getattr(self.location, "name", None)
+        return f"{self.user} @ {location_name or 'Global'} ({self.role})"
+
+    def clean(self):
+        super().clean()
+        if self.valid_from and self.valid_until and self.valid_from > self.valid_until:
+            raise ValidationError({"valid_until": _("valid_until must be after valid_from.")})
+
+        for field in ("accessible_fields", "restricted_fields"):
+            value = getattr(self, field) or []
+            if not isinstance(value, list):
+                raise ValidationError({field: _("Must be a list of field names.")})
+
+        if self.accessible_fields and self.restricted_fields:
+            overlap = set(self.accessible_fields).intersection(self.restricted_fields)
+            if overlap:
+                raise ValidationError(
+                    {
+                        "restricted_fields": _(
+                            "restricted_fields cannot overlap with accessible_fields."
+                        )
+                    }
+                )
+
+    def is_current(self, at: Optional[Any] = None) -> bool:
+        reference = at or timezone.now()
+        if not self.is_active:
+            return False
+        if self.valid_from and self.valid_from > reference:
+            return False
+        if self.valid_until and self.valid_until < reference:
+            return False
+        return True
+
+    def activate(self, *, updated_by=None):
+        if not self.is_active:
+            self.is_active = True
+            self.updated_by = updated_by
+            self.save(update_fields=["is_active", "updated_at", "updated_by"])
+
+    def deactivate(self, *, reason: Optional[str] = None, updated_by=None):
+        if self.is_active:
+            self.is_active = False
+            update_fields = {"is_active", "updated_at", "updated_by"}
+            if reason:
+                self.reason = reason
+                update_fields.add("reason")
+            self.updated_by = updated_by
+            self.save(update_fields=sorted(update_fields))
+
+
+class FieldPermissionQuerySet(models.QuerySet):
+    def readable(self):
+        return self.filter(can_read=True, is_active=True)
+
+    def writable(self):
+        return self.filter(can_write=True, is_active=True)
+
+    def for_role(self, role: Optional[Role]):
+        if role is None:
+            return self.none()
+        return self.filter(role=role)
+
+
+class FieldPermission(UUIDModel, TimeStampedModel, UserTrackedModel):
+    role = models.ForeignKey(
+        Role,
+        on_delete=models.CASCADE,
+        related_name="field_permissions",
+    )
+    model_name = models.CharField(max_length=150)
+    field_name = models.CharField(max_length=150)
+    can_read = models.BooleanField(default=True)
+    can_write = models.BooleanField(default=False)
+    conditions = models.JSONField(default=dict, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    objects = FieldPermissionQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = "Field Permission"
+        verbose_name_plural = "Field Permissions"
+        unique_together = ("role", "model_name", "field_name")
+        indexes = [
+            models.Index(fields=["role", "is_active"]),
+            models.Index(fields=["model_name", "field_name"]),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover - display helper
+        return f"{self.role} :: {self.model_name}.{self.field_name}"
+
+    def clean(self):
+        super().clean()
+        if not self.model_name:
+            raise ValidationError({"model_name": _("model_name is required.")})
+        if not self.field_name:
+            raise ValidationError({"field_name": _("field_name is required.")})
+
+    def save(self, *args: Any, **kwargs: Any):
+        if self.model_name:
+            self.model_name = self.model_name.strip()
+        if self.field_name:
+            self.field_name = self.field_name.strip()
+        super().save(*args, **kwargs)

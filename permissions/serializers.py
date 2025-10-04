@@ -10,7 +10,8 @@ from rest_framework import serializers
 from locations.models import Location
 
 from .constants import PermissionActions, PermissionResources
-from .models import Role, RoleAssignmentRequest, UserRole
+from .mixins import FieldPermissionMixin
+from .models import FieldPermission, LocationAccess, Role, RoleAssignmentRequest, UserRole
 
 User = get_user_model()
 
@@ -64,6 +65,174 @@ class RoleSerializer(serializers.ModelSerializer):
     def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
         if self.instance and attrs.get("code") and self.instance.is_system_role:
             raise serializers.ValidationError({"code": "System role codes cannot be modified."})
+        return super().validate(attrs)
+
+
+class LocationAccessSerializer(FieldPermissionMixin, serializers.ModelSerializer):
+    user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
+    role = serializers.PrimaryKeyRelatedField(queryset=Role.objects.all())
+    location = serializers.PrimaryKeyRelatedField(
+        queryset=Location.objects.all(), allow_null=True, required=False
+    )
+    granted_by = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(), allow_null=True, required=False
+    )
+
+    class Meta:
+        model = LocationAccess
+        fields = [
+            "id",
+            "user",
+            "role",
+            "location",
+            "can_read",
+            "can_create",
+            "can_update",
+            "can_delete",
+            "can_admin",
+            "accessible_fields",
+            "restricted_fields",
+            "inherit_to_children",
+            "valid_from",
+            "valid_until",
+            "granted_by",
+            "reason",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    permission_model_name = "permissions.LocationAccess"
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        valid_from = attrs.get("valid_from")
+        valid_until = attrs.get("valid_until")
+        if valid_from is None and self.instance is not None:
+            valid_from = self.instance.valid_from
+        if valid_until is None and self.instance is not None:
+            valid_until = self.instance.valid_until
+        if valid_from and valid_until and valid_from > valid_until:
+            raise serializers.ValidationError({"valid_until": "valid_until must be after valid_from."})
+
+        accessible = attrs.get("accessible_fields")
+        if accessible is None and self.instance is not None:
+            accessible = self.instance.accessible_fields or []
+        restricted = attrs.get("restricted_fields")
+        if restricted is None and self.instance is not None:
+            restricted = self.instance.restricted_fields or []
+        accessible_set = set(accessible or [])
+        restricted_set = set(restricted or [])
+        if accessible_set and restricted_set and accessible_set & restricted_set:
+            raise serializers.ValidationError(
+                {"restricted_fields": "restricted_fields cannot overlap with accessible_fields."}
+            )
+
+        return super().validate(attrs)
+
+
+class LocationAccessGrantSerializer(serializers.Serializer):
+    user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
+    role = serializers.PrimaryKeyRelatedField(queryset=Role.objects.all())
+    location = serializers.PrimaryKeyRelatedField(
+        queryset=Location.objects.all(), allow_null=True, required=False
+    )
+    can_read = serializers.BooleanField(required=False, default=True)
+    can_create = serializers.BooleanField(required=False, default=False)
+    can_update = serializers.BooleanField(required=False, default=False)
+    can_delete = serializers.BooleanField(required=False, default=False)
+    can_admin = serializers.BooleanField(required=False, default=False)
+    accessible_fields = serializers.ListField(
+        child=serializers.CharField(), required=False, allow_empty=True, default=list
+    )
+    restricted_fields = serializers.ListField(
+        child=serializers.CharField(), required=False, allow_empty=True, default=list
+    )
+    inherit_to_children = serializers.BooleanField(required=False, default=True)
+    valid_from = serializers.DateTimeField(required=False, allow_null=True)
+    valid_until = serializers.DateTimeField(required=False, allow_null=True)
+    reason = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        valid_from = attrs.get("valid_from")
+        valid_until = attrs.get("valid_until")
+        if valid_from and valid_until and valid_from > valid_until:
+            raise serializers.ValidationError({"valid_until": "valid_until must be after valid_from."})
+        accessible = set(attrs.get("accessible_fields", []) or [])
+        restricted = set(attrs.get("restricted_fields", []) or [])
+        if accessible and restricted and accessible & restricted:
+            raise serializers.ValidationError(
+                {"restricted_fields": "restricted_fields cannot overlap with accessible_fields."}
+            )
+        return attrs
+
+
+class LocationAccessBulkGrantSerializer(serializers.Serializer):
+    grants = LocationAccessGrantSerializer(many=True)
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        if not attrs.get("grants"):
+            raise serializers.ValidationError({"grants": "At least one grant payload is required."})
+        return attrs
+
+
+class LocationAccessRevokeSerializer(serializers.Serializer):
+    user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
+    role = serializers.PrimaryKeyRelatedField(queryset=Role.objects.all())
+    location = serializers.PrimaryKeyRelatedField(
+        queryset=Location.objects.all(), allow_null=True, required=False
+    )
+    reason = serializers.CharField(required=False, allow_blank=True)
+
+
+class LocationAccessBulkRevokeSerializer(serializers.Serializer):
+    revocations = LocationAccessRevokeSerializer(many=True)
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        if not attrs.get("revocations"):
+            raise serializers.ValidationError(
+                {"revocations": "At least one revocation payload is required."}
+            )
+        return attrs
+
+
+class LocationAccessCheckSerializer(serializers.Serializer):
+    action = serializers.CharField(required=False, default="read")
+    location = serializers.PrimaryKeyRelatedField(
+        queryset=Location.objects.all(), allow_null=True, required=False
+    )
+
+
+class FieldPermissionSerializer(serializers.ModelSerializer):
+    role = serializers.PrimaryKeyRelatedField(queryset=Role.objects.all())
+
+    class Meta:
+        model = FieldPermission
+        fields = [
+            "id",
+            "role",
+            "model_name",
+            "field_name",
+            "can_read",
+            "can_write",
+            "conditions",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        model_name = attrs.get("model_name")
+        field_name = attrs.get("field_name")
+        if model_name:
+            attrs["model_name"] = model_name.strip()
+        elif self.instance is not None:
+            attrs.setdefault("model_name", self.instance.model_name)
+        if field_name:
+            attrs["field_name"] = field_name.strip()
+        elif self.instance is not None:
+            attrs.setdefault("field_name", self.instance.field_name)
         return super().validate(attrs)
 
 
@@ -239,6 +408,13 @@ __all__ = [
     "RoleAssignmentPayloadSerializer",
     "BulkRoleAssignmentSerializer",
     "BulkRoleAssignmentRequestSerializer",
+    "LocationAccessSerializer",
+    "LocationAccessGrantSerializer",
+    "LocationAccessBulkGrantSerializer",
+    "LocationAccessRevokeSerializer",
+    "LocationAccessBulkRevokeSerializer",
+    "LocationAccessCheckSerializer",
+    "FieldPermissionSerializer",
     "MyRolesQuerySerializer",
     "EffectivePermissionQuerySerializer",
     "EffectivePermissionResponseSerializer",
