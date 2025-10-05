@@ -56,6 +56,7 @@ DJANGO_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.gis",
+    "django.contrib.postgres",
     "django.contrib.sites",
 ]
 
@@ -83,6 +84,7 @@ LOCAL_APPS = [
     "locations",
     "permissions",
     "audit",
+    "search",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
