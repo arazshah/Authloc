@@ -227,14 +227,36 @@ class AdvancedSearchRequestSerializer(serializers.Serializer):
         return {"page": page, "page_size": page_size}
 
 
+class PaginationMetadataSerializer(serializers.Serializer):
+    total = serializers.IntegerField()
+    page = serializers.IntegerField()
+    page_size = serializers.IntegerField()
+
+
+class SearchResponseSerializer(serializers.Serializer):
+    results = serializers.ListField(child=SearchResultSerializer())
+    facets = serializers.DictField(child=serializers.JSONField(), required=False)
+    pagination = PaginationMetadataSerializer()
+    duration_ms = serializers.IntegerField()
+
+
+class AdvancedSearchResponseSerializer(serializers.Serializer):
+    results = serializers.DictField(child=serializers.ListField(child=SearchResultSerializer()))
+    facets = serializers.DictField(child=serializers.DictField(), required=False)
+    duration_ms = serializers.IntegerField()
+
+
 __all__ = [
     "AdvancedSearchRequestSerializer",
+    "AdvancedSearchResponseSerializer",
     "AuditLogSearchRequestSerializer",
     "FacetSerializer",
     "LocationSearchRequestSerializer",
+    "PaginationMetadataSerializer",
     "PaginationSerializer",
     "SearchAnalyticsSerializer",
     "SearchClickSerializer",
+    "SearchResponseSerializer",
     "SearchRequestSerializer",
     "SearchResultSerializer",
     "SearchSuggestionSerializer",

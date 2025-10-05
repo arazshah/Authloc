@@ -15,7 +15,15 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
+
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularRedocView,
+    SpectacularSwaggerView,
+)
+
+from authloc.schema import APITestPlaygroundView, PostmanCollectionView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -24,4 +32,25 @@ urlpatterns = [
     path("api/v1/permissions/", include("permissions.urls", namespace="permissions")),
     path("api/v1/search/", include("search.urls", namespace="search")),
     path("", include("audit.urls", namespace="audit")),
+    path("api/schema/", SpectacularAPIView.as_view(api_version="1.0"), name="api-schema"),
+    path(
+        "api/schema/swagger/",
+        SpectacularSwaggerView.as_view(url_name="api-schema"),
+        name="api-swagger-ui",
+    ),
+    path(
+        "api/schema/redoc/",
+        SpectacularRedocView.as_view(url_name="api-schema"),
+        name="api-redoc",
+    ),
+    path(
+        "api/schema/postman/",
+        PostmanCollectionView.as_view(),
+        name="api-postman",
+    ),
+    path(
+        "api/playground/",
+        APITestPlaygroundView.as_view(),
+        name="api-playground",
+    ),
 ]

@@ -419,16 +419,76 @@ SWAGGER_SETTINGS = {
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Authloc API",
-    "DESCRIPTION": "API documentation for the Authloc location-based authentication platform.",
+    "DESCRIPTION": (
+        "Comprehensive OpenAPI 3.0 schema for the Authloc platform. "
+        "Includes authentication, permissions, GIS queries, and audit capabilities."
+    ),
     "VERSION": "1.0.0",
+    "SCHEMA_PATH_PREFIX": "/api",
+    "SERVE_URLCONF": "authloc.urls",
     "SERVE_INCLUDE_SCHEMA": False,
+    "SERVE_PUBLIC": True,
     "COMPONENT_SPLIT_REQUEST": True,
     "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],
-    "SCHEMA_PATH_PREFIX": "/api",
     "SERVE_AUTHENTICATION": [
         "rest_framework.authentication.SessionAuthentication",
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
+    "SECURITY": [
+        {"jwtAuth": []},
+        {"cookieAuth": []},
+    ],
+    "COMPONENTS": {
+        "securitySchemes": {
+            "jwtAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+                "description": (
+                    "JWT Bearer token obtained via the authentication endpoints. "
+                    "Send as `Authorization: Bearer <token>`."
+                ),
+            },
+            "cookieAuth": {
+                "type": "apiKey",
+                "in": "cookie",
+                "name": JWT_AUTH_COOKIE,
+                "description": (
+                    "Session-based authentication cookie set when using browser clients."
+                ),
+            },
+        }
+    },
+    "CONTACT": {
+        "name": "Authloc Platform Support",
+        "email": "support@authloc.local",
+    },
+    "LICENSE": {
+        "name": "Proprietary",
+        "url": "https://authloc.local/legal/license",
+    },
+    "TAGS": [
+        {"name": "Authentication", "description": "User registration and token workflows."},
+        {"name": "Locations", "description": "Location hierarchy and GIS operations."},
+        {"name": "Permissions", "description": "Role-based access control management."},
+        {"name": "Search", "description": "Search queries, analytics, and suggestions."},
+        {"name": "Audit", "description": "Audit logging and reporting endpoints."},
+    ],
+    "SWAGGER_UI_DIST": "SIDECAR",
+    "SWAGGER_UI_SETTINGS": {
+        "deepLinking": True,
+        "defaultModelRendering": "model",
+        "persistAuthorization": True,
+        "displayRequestDuration": True,
+        "filter": True,
+    },
+    "REDOC_DIST": "SIDECAR",
+    "REDOC_SETTINGS": {
+        "expandResponses": "200,201",
+        "requiredPropsFirst": True,
+        "showExtensions": True,
+        "hideDownloadButton": False,
+    },
 }
 
 CSRF_COOKIE_NAME = env("CSRF_COOKIE_NAME", default="csrftoken")
