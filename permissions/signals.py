@@ -6,7 +6,8 @@ from django.db import transaction
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
-from .models import FieldPermission, LocationAccess
+from core.cache_utils import cache_version_manager
+from .models import FieldPermission, LocationAccess, Role, UserRole
 from .permission_checker import PermissionChecker
 
 
@@ -18,6 +19,8 @@ def _invalidate_users(user_ids: Iterable):
     def _on_commit():
         for user_id in unique_ids:
             PermissionChecker.invalidate_for_user(user_id)
+        # Invalidate cache version for permissions
+        cache_version_manager.increment_version('permissions')
 
     transaction.on_commit(_on_commit)
 
@@ -38,8 +41,23 @@ def _users_for_role(role_id) -> Sequence:
     )
 
 
-@receiver(post_save, sender=FieldPermission)
-@receiver(post_delete, sender=FieldPermission)
-def invalidate_field_permission_cache(sender, instance: FieldPermission, **kwargs):
-    user_ids = _users_for_role(instance.role_id)
+@receiver(post_save, sender=Role)
+@receiver(post_delete, sender=Role)
+def invalidate_role_cache(sender, instance: Role, **kwargs):
+    """Invalidate cache when roles are modified."""
+    # Get all users with this role
+    user_ids = (
+        UserRole.objects.filter(role=instance)
+        .values_list("user_id", flat=True)
+        .distinct()
+    )
     _invalidate_users(user_ids)
+    # Also invalidate role cache version
+    cache_version_manager.increment_version('roles')
+
+
+@receiver(post_save, sender=UserRole)
+@receiver(post_delete, sender=UserRole)
+def invalidate_user_role_cache(sender, instance: UserRole, **kwargs):
+    """Invalidate cache when user roles are modified."""
+    _invalidate_users([instance.user_id])

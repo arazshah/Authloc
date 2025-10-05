@@ -13,7 +13,9 @@ from django.core.cache import cache
 from django.db import connection, models
 from django.db.models import Count, Q
 from django.utils import timezone
+from django.conf import settings
 
+from core.cache_utils import cache_manager, cache_key_generator, cache_version_manager
 from .models import AuditLog, SecurityAlert
 
 
@@ -25,7 +27,7 @@ class AuditQueryOptimizer:
     """
 
     def __init__(self):
-        self.cache_timeout = 300  # 5 minutes default cache timeout
+        self.cache_timeout = getattr(settings, 'CACHE_TIMEOUT_AUDIT_STATS', 5 * 60)  # 5 minutes default
 
     def get_user_recent_activity(self, user_id: str, hours: int = 24, use_cache: bool = True) -> List[Dict]:
         """
@@ -77,45 +79,49 @@ class AuditQueryOptimizer:
         Returns:
             Risk score summary statistics
         """
-        cache_key = f"audit_risk_summary_{days}_{timezone.now().strftime('%Y%m%d%H')}"
+        cache_key = cache_key_generator.generate_cache_key('audit_risk_summary', days)
+        version = cache_version_manager.get_current_version('audit')
+
+        def _compute_risk_summary():
+            start_date = timezone.now() - timedelta(days=days)
+
+            # Use database aggregation for better performance
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT
+                        COUNT(*) as total_logs,
+                        AVG(risk_score) as avg_risk,
+                        MAX(risk_score) as max_risk,
+                        MIN(risk_score) as min_risk,
+                        COUNT(CASE WHEN risk_score >= 70 THEN 1 END) as high_risk_count,
+                        COUNT(CASE WHEN is_suspicious = true THEN 1 END) as suspicious_count
+                    FROM audit_auditlog
+                    WHERE created_at >= %s
+                """, [start_date])
+
+                row = cursor.fetchone()
+
+            summary = {
+                'total_logs': row[0],
+                'avg_risk_score': round(row[1] or 0, 2),
+                'max_risk_score': row[2] or 0,
+                'min_risk_score': row[3] or 0,
+                'high_risk_count': row[4],
+                'suspicious_count': row[5],
+                'analyzed_days': days,
+            }
+
+            return summary
 
         if use_cache:
-            cached_data = cache.get(cache_key)
-            if cached_data:
-                return cached_data
-
-        start_date = timezone.now() - timedelta(days=days)
-
-        # Use database aggregation for better performance
-        with connection.cursor() as cursor:
-            cursor.execute("""
-                SELECT
-                    COUNT(*) as total_logs,
-                    AVG(risk_score) as avg_risk,
-                    MAX(risk_score) as max_risk,
-                    MIN(risk_score) as min_risk,
-                    COUNT(CASE WHEN risk_score >= 70 THEN 1 END) as high_risk_count,
-                    COUNT(CASE WHEN is_suspicious = true THEN 1 END) as suspicious_count
-                FROM audit_auditlog
-                WHERE created_at >= %s
-            """, [start_date])
-
-            row = cursor.fetchone()
-
-        summary = {
-            'total_logs': row[0],
-            'avg_risk_score': round(row[1] or 0, 2),
-            'max_risk_score': row[2] or 0,
-            'min_risk_score': row[3] or 0,
-            'high_risk_count': row[4],
-            'suspicious_count': row[5],
-            'analyzed_days': days,
-        }
-
-        if use_cache:
-            cache.set(cache_key, summary, self.cache_timeout)
-
-        return summary
+            return cache_manager.get_cached_or_set(
+                key=cache_key,
+                callable_func=_compute_risk_summary,
+                timeout=self.cache_timeout,
+                version=version
+            )
+        else:
+            return _compute_risk_summary()
 
     def get_top_risky_users(self, limit: int = 10, days: int = 7, use_cache: bool = True) -> List[Dict]:
         """
@@ -129,33 +135,36 @@ class AuditQueryOptimizer:
         Returns:
             List of users with risk statistics
         """
-        cache_key = f"audit_top_risky_users_{limit}_{days}_{timezone.now().strftime('%Y%m%d%H')}"
+        cache_key = cache_key_generator.generate_cache_key('audit_top_risky_users', limit, days)
+        version = cache_version_manager.get_current_version('audit')
+
+        def _compute_top_risky_users():
+            start_date = timezone.now() - timedelta(days=days)
+
+            # Optimized query using database aggregation
+            risky_users = AuditLog.objects.filter(
+                created_at__gte=start_date,
+                risk_score__gte=50  # Only consider logs with some risk
+            ).values('user', 'username').annotate(
+                high_risk_count=Count('id', filter=Q(risk_score__gte=70)),
+                total_actions=Count('id'),
+                avg_risk_score=models.Avg('risk_score'),
+                max_risk_score=models.Max('risk_score'),
+                suspicious_count=Count('id', filter=Q(is_suspicious=True))
+            ).order_by('-high_risk_count', '-avg_risk_score')[:limit]
+
+            users_data = list(risky_users)
+            return users_data
 
         if use_cache:
-            cached_data = cache.get(cache_key)
-            if cached_data:
-                return cached_data
-
-        start_date = timezone.now() - timedelta(days=days)
-
-        # Optimized query using database aggregation
-        risky_users = AuditLog.objects.filter(
-            created_at__gte=start_date,
-            risk_score__gte=50  # Only consider logs with some risk
-        ).values('user', 'username').annotate(
-            high_risk_count=Count('id', filter=Q(risk_score__gte=70)),
-            total_actions=Count('id'),
-            avg_risk_score=models.Avg('risk_score'),
-            max_risk_score=models.Max('risk_score'),
-            suspicious_count=Count('id', filter=Q(is_suspicious=True))
-        ).order_by('-high_risk_count', '-avg_risk_score')[:limit]
-
-        users_data = list(risky_users)
-
-        if use_cache:
-            cache.set(cache_key, users_data, self.cache_timeout)
-
-        return users_data
+            return cache_manager.get_cached_or_set(
+                key=cache_key,
+                callable_func=_compute_top_risky_users,
+                timeout=self.cache_timeout,
+                version=version
+            )
+        else:
+            return _compute_top_risky_users()
 
     def bulk_create_audit_logs(self, logs_data: List[Dict]) -> int:
         """

@@ -9,14 +9,16 @@ from uuid import UUID
 from django.core.cache import cache
 from django.db.models import Q
 from django.utils import timezone
+from django.conf import settings
 
+from core.cache_utils import cache_manager, cache_key_generator, cache_version_manager
 from locations.models import Location
 
 from .models import FieldPermission, LocationAccess
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CACHE_TIMEOUT = 300  # seconds
+DEFAULT_CACHE_TIMEOUT = getattr(settings, 'CACHE_TIMEOUT_USER_PERMISSIONS', 15 * 60)  # 15 minutes default
 
 _ACTION_ATTRIBUTE_MAP: Dict[str, str] = {
     "read": "can_read",
@@ -631,4 +633,59 @@ class PermissionChecker:
         return False
 
 
-__all__ = ["PermissionChecker", "AccessRecord", "FieldPermissionRecord"]
+__all__ = ["PermissionChecker", "AccessRecord", "FieldPermissionRecord", "cache_user_permissions"]
+
+
+def cache_user_permissions(user) -> Dict[str, Any]:
+    """
+    Cache comprehensive user permissions data for fast access.
+
+    Args:
+        user: User instance
+
+    Returns:
+        Dictionary containing cached permission data
+    """
+    if not user or not hasattr(user, 'pk'):
+        return {}
+
+    cache_key = cache_key_generator.generate_cache_key('user_permissions', user.pk)
+    version = cache_version_manager.get_current_version('permissions')
+
+    def _fetch_permissions():
+        """Fetch comprehensive permission data for the user."""
+        checker = PermissionChecker(user)
+
+        # Get accessible locations for different actions
+        readable_locations = [loc.pk for loc in checker.get_accessible_locations('read')]
+        writable_locations = [loc.pk for loc in checker.get_accessible_locations('write')]
+        admin_locations = [loc.pk for loc in checker.get_accessible_locations('admin')]
+
+        # Get user roles
+        from .models import UserRole
+        user_roles = UserRole.objects.active().filter(user=user).select_related('role', 'location')
+        roles_data = []
+        for ur in user_roles:
+            roles_data.append({
+                'role_code': ur.role.code if ur.role else None,
+                'role_name': ur.role.name if ur.role else None,
+                'location_id': ur.location.pk if ur.location else None,
+                'permissions': ur.role.permissions if ur.role else {},
+            })
+
+        return {
+            'user_id': user.pk,
+            'username': getattr(user, 'username', None),
+            'readable_locations': readable_locations,
+            'writable_locations': writable_locations,
+            'admin_locations': admin_locations,
+            'roles': roles_data,
+            'cached_at': timezone.now().isoformat(),
+        }
+
+    return cache_manager.get_cached_or_set(
+        key=cache_key,
+        callable_func=_fetch_permissions,
+        timeout=DEFAULT_CACHE_TIMEOUT,
+        version=version
+    )

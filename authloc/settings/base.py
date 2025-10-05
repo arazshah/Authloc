@@ -162,11 +162,31 @@ CACHES = {
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
             "IGNORE_EXCEPTIONS": True,
+            "SERIALIZER": "django_redis.serializers.json.JSONSerializer",
+            "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
         },
-    }
+    },
+    "api_cache": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": env("REDIS_URL").replace("/1", "/2"),  # Use separate Redis DB
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "IGNORE_EXCEPTIONS": True,
+            "SERIALIZER": "django_redis.serializers.json.JSONSerializer",
+            "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
+        },
+    },
+    "session_cache": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": env("REDIS_URL").replace("/1", "/3"),  # Use separate Redis DB
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "IGNORE_EXCEPTIONS": True,
+        },
+    },
 }
 SESSION_ENGINE = "django.contrib.sessions.backends.cache"
-SESSION_CACHE_ALIAS = "default"
+SESSION_CACHE_ALIAS = "session_cache"
 
 AUTHENTICATION_BACKENDS = (
     "axes.backends.AxesStandaloneBackend",
@@ -412,4 +432,18 @@ SPECTACULAR_SETTINGS = {
 CSRF_COOKIE_NAME = env("CSRF_COOKIE_NAME", default="csrftoken")
 SESSION_COOKIE_NAME = env("SESSION_COOKIE_NAME", default="sessionid")
 
-INTERNAL_IPS = ["127.0.0.1"]
+# Cache Settings
+CACHE_MIDDLEWARE_ALIAS = "api_cache"
+CACHE_MIDDLEWARE_SECONDS = 300  # 5 minutes default
+CACHE_MIDDLEWARE_KEY_PREFIX = "authloc_api"
+
+# Cache Timeouts (in seconds)
+CACHE_TIMEOUT_USER_PERMISSIONS = 15 * 60  # 15 minutes
+CACHE_TIMEOUT_LOCATION_TREE = 60 * 60  # 1 hour
+CACHE_TIMEOUT_ROLE_DEFINITIONS = 24 * 60 * 60  # 24 hours
+CACHE_TIMEOUT_GIS_QUERIES = 30 * 60  # 30 minutes
+CACHE_TIMEOUT_AUDIT_STATS = 5 * 60  # 5 minutes
+CACHE_TIMEOUT_API_RESPONSES = 10 * 60  # 10 minutes
+
+# Cache Compression
+CACHE_COMPRESSION_THRESHOLD = 1024  # Compress objects larger than 1KB
