@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Security Alert - {{ alert.severity_display }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .header { background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; }
+        .alert-critical { border-left: 5px solid #dc3545; }
+        .alert-high { border-left: 5px solid #fd7e14; }
+        .alert-medium { border-left: 5px solid #ffc107; }
+        .alert-low { border-left: 5px solid #28a745; }
+        .severity { font-weight: bold; text-transform: uppercase; }
+        .critical { color: #dc3545; }
+        .high { color: #fd7e14; }
+        .medium { color: #ffc107; }
+        .low { color: #28a745; }
+        .details { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d; }
+    </style>
+</head>
+<body>
+    <div class="header alert-{{ alert.severity }}">
+        <h1>Security Alert Notification</h1>
+        <p><strong>Severity:</strong> <span class="severity {{ alert.severity }}">{{ alert.get_severity_display }}</span></p>
+        <p><strong>Generated:</strong> {{ timestamp }}</p>
+    </div>
+
+    <h2>{{ alert.title }}</h2>
+    <p>{{ alert.description }}</p>
+
+    <div class="details">
+        <h3>Alert Details</h3>
+        <ul>
+            <li><strong>Alert ID:</strong> {{ alert.id }}</li>
+            <li><strong>Type:</strong> {{ alert.get_alert_type_display }}</li>
+            <li><strong>Timestamp:</strong> {{ alert.created_at }}</li>
+            <li><strong>User:</strong> {{ alert.user.get_username if alert.user else 'N/A' }}</li>
+            <li><strong>IP Address:</strong> {{ alert.ip_address|default:'N/A' }}</li>
+        </ul>
+    </div>
+
+    {% if alert.audit_log %}
+    <div class="details">
+        <h3>Related Audit Log</h3>
+        <ul>
+            <li><strong>Action:</strong> {{ alert.audit_log.action }}</li>
+            <li><strong>Resource:</strong> {{ alert.audit_log.resource_type }} - {{ alert.audit_log.resource_name }}</li>
+            <li><strong>Risk Score:</strong> {{ alert.audit_log.risk_score }}</li>
+            <li><strong>Request Path:</strong> {{ alert.audit_log.request_path }}</li>
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if alert.details %}
+    <div class="details">
+        <h3>Additional Details</h3>
+        <pre>{{ alert.details|safe }}</pre>
+    </div>
+    {% endif %}
+
+    <div class="footer">
+        <p><strong>Important:</strong> This is an automated security alert. Please investigate immediately if this is a critical alert.</p>
+        <p>Alert Management System - Authloc Security</p>
+    </div>
+</body>
+</html>

@@ -22,4 +22,5 @@ urlpatterns = [
     path("api/v1/auth/", include("authentication.urls", namespace="authentication")),
     path("api/v1/locations/", include("locations.urls", namespace="locations")),
     path("api/v1/permissions/", include("permissions.urls", namespace="permissions")),
+    path("", include("audit.urls", namespace="audit")),
 ]

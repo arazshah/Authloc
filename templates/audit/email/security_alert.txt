@@ -1,0 +1,27 @@
+Security Alert Notification
+========================
+
+Alert Details:
+- Type: {{ alert.alert_type_display }}
+- Severity: {{ alert.severity_display }}
+- Title: {{ alert.title }}
+- Description: {{ alert.description }}
+
+Alert Information:
+- Alert ID: {{ alert.id }}
+- Timestamp: {{ alert.created_at }}
+- User: {{ alert.user.get_username if alert.user else 'N/A' }}
+- IP Address: {{ alert.ip_address|default:'N/A' }}
+
+{% if alert.audit_log %}
+Related Audit Log:
+- Action: {{ alert.audit_log.action }}
+- Resource: {{ alert.audit_log.resource_type }} {{ alert.audit_log.resource_name }}
+- Risk Score: {{ alert.audit_log.risk_score }}
+{% endif %}
+
+Details: {{ alert.details|default:'N/A' }}
+
+This is an automated security alert. Please investigate immediately if this is a critical alert.
+
+Generated at: {{ timestamp }}

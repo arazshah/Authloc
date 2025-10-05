@@ -98,6 +98,7 @@ MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "audit.middleware.AuditMiddleware",
     "axes.middleware.AxesMiddleware",
 ]
 
@@ -263,7 +264,11 @@ CELERY_BEAT_SCHEDULE = {
     "expire-user-roles-hourly": {
         "task": "permissions.expire_user_roles",
         "schedule": timedelta(hours=1),
-    }
+    },
+    "cleanup-audit-data-daily": {
+        "task": "audit.cleanup_audit_data",
+        "schedule": timedelta(days=1),
+    },
 }
 
 AXES_FAILURE_LIMIT = env.int("AXES_FAILURE_LIMIT")
@@ -273,6 +278,35 @@ AXES_RESET_ON_SUCCESS = True
 EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL")
 SERVER_EMAIL = env("SERVER_EMAIL", default=DEFAULT_FROM_EMAIL)
+
+# Audit and Security Settings
+AUDIT_LOGS_RETENTION_DAYS = env.int("AUDIT_LOGS_RETENTION_DAYS", default=365)
+SECURITY_ALERTS_RETENTION_DAYS = env.int("SECURITY_ALERTS_RETENTION_DAYS", default=730)
+AUDIT_ARCHIVE_THRESHOLD_DAYS = env.int("AUDIT_ARCHIVE_THRESHOLD_DAYS", default=1095)  # 3 years
+
+# Audit Middleware Settings
+AUDIT_EXCLUDE_URLS = [
+    '/static/',
+    '/media/',
+    '/favicon.ico',
+    '/admin/jsi18n/',
+    '/admin/css/',
+    '/admin/img/',
+]
+AUDIT_API_PREFIXES = [
+    '/api/',
+]
+AUDIT_MAX_BODY_SIZE = 10 * 1024  # 10KB
+
+# Alert Notification Settings
+AUDIT_EMAIL_ALERTS_ENABLED = env.bool("AUDIT_EMAIL_ALERTS_ENABLED", default=True)
+AUDIT_SMS_ALERTS_ENABLED = env.bool("AUDIT_SMS_ALERTS_ENABLED", default=False)
+AUDIT_DASHBOARD_ALERTS_ENABLED = env.bool("AUDIT_DASHBOARD_ALERTS_ENABLED", default=True)
+AUDIT_ALERT_EMAIL_RECIPIENTS = env.list("AUDIT_ALERT_EMAIL_RECIPIENTS", default=[])
+
+# Risk Scoring Settings
+AUDIT_RISK_THRESHOLD_HIGH = env.int("AUDIT_RISK_THRESHOLD_HIGH", default=70)
+AUDIT_RISK_THRESHOLD_CRITICAL = env.int("AUDIT_RISK_THRESHOLD_CRITICAL", default=90)
 
 DJANGO_LOG_LEVEL = env("DJANGO_LOG_LEVEL")
 LOGGING = {
