@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.contrib.gis.db import models as gis_models
-from django.contrib.postgres.fields import JSONField
 from django.db import models
+from django.db.models import JSONField
 
 from core.models import TimeStampedModel, UUIDModel
 

@@ -152,7 +152,7 @@ class AuditLogSearchAPIView(BaseSearchAPIView):
     summary="Get search suggestions",
     description="Provides type-ahead suggestions based on historical search popularity.",
     parameters=[
-        OpenApiParameter("query", OpenApiParameter.STR, OpenApiParameter.PATH, description="Partial query text to retrieve suggestions for."),
+        OpenApiParameter("query", type=str, location=OpenApiParameter.PATH, description="Partial query text to retrieve suggestions for."),
     ],
     responses={
         200: OpenApiResponse(response=SearchSuggestionSerializer(many=True), description="Suggestions returned successfully."),
@@ -231,15 +231,15 @@ class SearchAnalyticsAPIView(APIView):
         parameters=[
             OpenApiParameter(
                 "target",
-                OpenApiParameter.STR,
-                OpenApiParameter.QUERY,
+                type=str,
+                location=OpenApiParameter.QUERY,
                 required=False,
                 description="Optional search target to filter analytics (e.g. `locations`, `users`).",
             ),
             OpenApiParameter(
                 "days",
-                OpenApiParameter.INT,
-                OpenApiParameter.QUERY,
+                type=int,
+                location=OpenApiParameter.QUERY,
                 required=False,
                 description="Number of days to look back. Defaults to 7.",
             ),
